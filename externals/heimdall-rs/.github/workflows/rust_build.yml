@@ -1,0 +1,23 @@
+name: Rust Build
+
+on: [push]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      working-directory: ./heimdall
+      run: cargo build --verbose
+    - name: Run tests
+      working-directory: ./heimdall
+      run: |
+        cargo test --package heimdall
+        cargo test --package heimdall-config
+        cargo test --package heimdall-common

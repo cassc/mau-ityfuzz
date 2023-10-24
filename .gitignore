@@ -1,0 +1,11 @@
+/target
+/Cargo.lock
+/tmp
+/solutions
+/*bench
+bin
+corpus
+.vscode
+bytecode.ll
+kernel.ll
+kernel.ptx
