@@ -8,3 +8,12 @@
     path = externals/revm
     url = https://github.com/fuzzland/revm.git
     branch = ityfuzz-fork
+#[submodule "cli/externals/move"]
+#	path = cli/externals/move
+#	url = https://github.com/fuzzland/move.git
+#[submodule "cli/externals/heimdall-rs"]
+#	path = cli/externals/heimdall-rs
+#	url = https://github.com/fuzzland/heimdall-rs.git
+#[submodule "cli/externals/revm"]
+#	path = cli/externals/revm
+#	url = https://github.com/fuzzland/revm.git

@@ -71,3 +71,5 @@ pub static mut RUN_FOREVER: bool = false;
 pub static mut GPU_ENABLE: bool = false;
 
 pub static mut DUMP_CORPUS: bool = false;
+
+pub const STATS_CPU_DEFAULT: u64 = 300;

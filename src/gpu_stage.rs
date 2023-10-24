@@ -33,7 +33,7 @@ use core::{
     cmp::{max, min},
 };
 use std::process::exit;
-use crate::evm::config::{NJOBS, SEED_SIZE, RUN_FOREVER, GPU_ENABLE};
+use crate::evm::config::{NJOBS, SEED_SIZE, RUN_FOREVER, GPU_ENABLE, STATS_CPU_DEFAULT};
 use crate::evm::vm::EVMState;
 use crate::state::{HasCaller, HasExecutionResult};
 use crate::evm::input::EVMInput;
@@ -63,7 +63,6 @@ extern "C" {
     fn cuLoadStorage(src: *const u8, slotCnt: u32, wrapi: u32);
 }
 
-const STATS_CPU_DEFAULT: u64 = 60;//300;
 
 
 /// A Mutational stage is the stage in a fuzzing run that mutates inputs.
