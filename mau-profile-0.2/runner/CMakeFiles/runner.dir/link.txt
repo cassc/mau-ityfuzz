@@ -1,0 +1,1 @@
+clang++ -fPIC -O3 -DNDEBUG -shared -Wl,-soname,librunner.so -o librunner.so CMakeFiles/runner.dir/runner.cc.o CMakeFiles/runner.dir/debug.cc.o   -L/usr/local/cuda-12/lib64  -Wl,-rpath,/usr/local/cuda-12/lib64 -lcuda -lcudart 

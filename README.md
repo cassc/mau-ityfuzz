@@ -1,5 +1,18 @@
+# Run in docker
+
+``` bash
+# Clone this repo
+git clone --depth 1 git@github.com:cassc/mau-ityfuzz.git
+cd mau-ityfuzz
+docker run --gpus all -it --rm -v $(pwd):/app -w /app mau-profile /bin/bash
+LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'
+```
+
+
+--------------------------------------------------------------------------------
+
 # ItyFuzz 🍦
-Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.  
+Fast hybrid fuzzer for EVM & MoveVM (WIP) smart contracts.
 
 You can generate exploits **instantly** by just providing the contract address:
 ![](https://ityfuzz.assets.fuzz.land/demo2.gif)
@@ -20,7 +33,7 @@ Then, you can visit the interface at http://localhost:8000
 
 ### Statistics & Comparison
 
-Time taken for finding vulnerabilities / generating exploits: 
+Time taken for finding vulnerabilities / generating exploits:
 
 | Project Name             | Vulnerability           | **Mythril** | **SMARTIAN**    | **Slither** | **ItyFuzz** |
 |---------------|-------------------------|---------|-------------|---------|---------|
@@ -48,7 +61,7 @@ Test Coverage:
 
 ### Building
 
-You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.  
+You need to have `libssl-dev` (OpenSSL) and `libz3-dev` (refer to [Z3 Installation](#z3-installation) section for instruction) installed.
 
 ```bash
 # download move dependencies
@@ -99,7 +112,7 @@ calculate the unique bugs
 **Verilog CTF Challenge 2**
 `tests/verilog-2/`
 
-Flashloan attack + Reentrancy. The target is to reach line 34 in `Bounty.sol`. 
+Flashloan attack + Reentrancy. The target is to reach line 34 in `Bounty.sol`.
 
 Exact Exploit:
 ```
@@ -117,7 +130,7 @@ solc *.sol -o . --bin --abi --overwrite --base-path ../../
 ./cli -f -t "./tests/verilog-2/*"
 ```
 
-`-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance. 
+`-f` flag enables automated flashloan, which hooks all ERC20 external calls and make any users to have infinite balance.
 
 cuda mode
 ```
@@ -126,17 +139,17 @@ cuda mode
 
 offline mode
 ```
-/data_HDD/weimin/EXP-Artifact/mau-maze-test/baselines/ityfuzz/cli/target/release/cli -t "./tests/verilog-2/*"  
+/data_HDD/weimin/EXP-Artifact/mau-maze-test/baselines/ityfuzz/cli/target/release/cli -t "./tests/verilog-2/*"
 ```
 
 ### Fuzz a Project (Offline)
-You can fuzz a project by providing a path to the project directory. 
+You can fuzz a project by providing a path to the project directory.
 ```bash
 ./cli -t '[DIR_PATH]/*'
 ```
 ItyFuzz would attempt to deploy all artifacts in the directory to a blockchain with no other smart contracts.
 
-Specifically, the project directory should contain 
+Specifically, the project directory should contain
 a few `[X].abi` and `[X].bin` files. For example, to fuzz a contract named `main.sol`, you should
 ensure `main.abi` and `main.bin` exist in the project directory.
 The fuzzer will automatically detect the contracts in directory, the correlation between them (see `tests/multi-contract`),
@@ -147,22 +160,22 @@ can add a `[X].address`, where `[X]` is the contract name, to specify the addres
 
 Caveats:
 
-* Keep in mind that ItyFuzz is fuzzing on a clean blockchain, 
+* Keep in mind that ItyFuzz is fuzzing on a clean blockchain,
 so you should ensure all related contracts (e.g., ERC20 token, Uniswap, etc.) are deployed to the blockchain before fuzzing.
 
-* You also need to overwrite all `constructor(...)` in the smart contract to 
+* You also need to overwrite all `constructor(...)` in the smart contract to
 to make it have no function argument. ItyFuzz assumes constructors have no argument.
 
 ### Fuzz a Project (Online)
 
-Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result. 
+Rebuild with `flashloan_v2` (only supported in onchain) enabled to get better result.
 ```bash
 sed -i 's/\"default = [\"/\"default = [flashloan_v2,\"/g' ./Cargo.toml
 cd ./cli/
 cargo build --release
 ```
 
-To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built. 
+To effectively cache the costly RPC calls to blockchains, third-party APIs, and Etherscan, a proxy is built.
 To run the proxy:
 ```bash
 pip3 install -r proxy/requirements.txt
@@ -171,7 +184,7 @@ python3 proxy/main.py
 
 You can fuzz a project by providing an address, a block, and a chain type.
 ```bash
-./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE] 
+./cli -o -t [TARGET_ADDR] --onchain-block-number [BLOCK] -c [CHAIN_TYPE]
 ```
 
 Example:
@@ -186,16 +199,16 @@ Fuzzing with flashloan and oracles enabled:
 
 ItyFuzz would pull the ABI of the contract from Etherscan and fuzz it.
 If ItyFuzz encounters an unknown slot in the memory, it would pull the slot from chain RPC.
-If ItyFuzz encounters calls to external unknown contract, it would pull the bytecode and ABI of that contract. 
+If ItyFuzz encounters calls to external unknown contract, it would pull the bytecode and ABI of that contract.
 If its ABI is not available, ItyFuzz would not send any transaction to that contract.
 
-To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command. 
+To use proxy, append `--onchain-local-proxy-addr http://localhost:5003` to your CLI command.
 
 ### Onchain Fetching
 ItyFuzz attempts to fetch storage from blockchain nodes when SLOAD is encountered and the target is uninitialized.
-There are three ways of fetching: 
+There are three ways of fetching:
 * OneByOne: fetch one slot at a time. This is the default mode. It is slow but never fails.
-* All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large. 
+* All: fetch all slots at once using custom API `eth_getStorageAll` on our nodes. This is the fastest mode, but it may fail if the contract is too large.
 * Dump: dump storage using debug API `debug_storageRangeAt`. This only works for ETH (for now) and fails most of the time.
 
 ### Z3 Installation
@@ -205,7 +218,7 @@ git clone https://github.com/Z3Prover/z3 && cd z3
 python scripts/mk_make.py --prefix=/usr/local
 cd build && make -j64 && sudo make install
 ```
-If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h` 
+If the build command still fails for not finding `z3.h`, do `export Z3_SYS_Z3_HEADER=/usr/local/include/z3.h`
 
 **Ubuntu**
 
@@ -238,6 +251,6 @@ on-chain test
 1. Gym
 ganache-cli -p 5003 -f  https://bsc-mainnet.nodereal.io/v1/32f5543e19e6421da4b4219ea9d4da24@18501049
 
-LD_LIBRARY_PATH=/home/weimin/build/runner/ /data_HDD/weimin/EXP-Artifact/ityfuzz/cli/target/release/cli 
+LD_LIBRARY_PATH=/home/weimin/build/runner/ /data_HDD/weimin/EXP-Artifact/ityfuzz/cli/target/release/cli
   -f -o -c BSC --onchain-block-number 18501049 -i -t 0xA8987285E100A8b557F06A7889F79E0064b359f2,0x6CD71A07E72C514f5d511651F6808c6395353968,0x7109709ECfa91a80626fF3989D68f67F5b1D
 D12D,0x3a0d9d7764FAE860A659eb96A500F1323b411e68 --onchain-local-proxy-addr http://localhost:5003  --flashloan-price-oracle onchain

@@ -1,0 +1,1 @@
+/mau/mau_profile-0.2/deps/bin/clang -O3 -DNDEBUG -flto -S CMakeFiles/runtime.dir/rt.o.c.o CMakeFiles/runtime.dir/keccak256.c.o CMakeFiles/runtime.dir/mutate.c.o CMakeFiles/runtime.dir/storage.c.o -o runtime 
