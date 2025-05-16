@@ -1,5 +1,14 @@
-FROM nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04 as runner
-FROM nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04 as builder
+# FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu20.04 as runner
+# FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu20.04 as builder
+
+# FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04 as runner
+# FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04 as builder
+
+# FROM nvidia/cuda:11.8.0-devel-ubuntu18.04 as runner
+# FROM nvidia/cuda:11.8.0-devel-ubuntu18.04 as builder
+
+FROM augustus/mau-profile as runner
+FROM augustus/mau-profile as builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y tzdata
@@ -32,11 +41,12 @@ COPY src ./src
 COPY cli ./cli
 COPY benches ./benches
 COPY externals ./externals
-COPY build.rs .
 
 # Copy the dynamic library
-COPY runner ./runner
-RUN echo "Using runner library" $(md5sum runner/librunner.so)
+COPY runner/librunner.so /usr/local/lib/librunner.so
+
+ENV LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH"
+ENV LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/lib:/usr/local/cuda/lib64/stubs:$LIBRARY_PATH"
 
 # build offchain binary
 WORKDIR /builder/cli
