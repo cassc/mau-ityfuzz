@@ -1,0 +1,51 @@
+#==============================================================================#
+# This file specifies intentionally untracked files that git should ignore.
+# See: http://www.kernel.org/pub/software/scm/git/docs/gitignore.html
+#
+# This file is intentionally different from the output of `git svn show-ignore`,
+# as most of those are useless.
+#==============================================================================#
+
+#==============================================================================#
+# File extensions to be ignored anywhere in the tree.
+#==============================================================================#
+# Byte compiled python modules.
+/deps/**
+*.pyc
+# vim swap files
+.*.sw?
+.sw?
+#OS X specific files.
+.DS_store
+
+# bytecode llvm asm
+*.ll
+*.bc
+
+# NVPTX asm
+*.ptx
+
+# Nested build directory
+/build*
+
+#==============================================================================#
+# Explicit files to ignore (only matches one).
+#==============================================================================#
+# Visual Studio built-in CMake configuration
+/CMakeSettings.json
+# CLion project configuration
+/.idea
+
+#==============================================================================#
+# Directories to ignore (do not add trailing '/'s, they skip symlinks).
+#==============================================================================#
+# VS2017 and VSCode config files.
+.vscode
+.vs
+# pythonenv for github Codespaces
+pythonenv*
+# clangd index. (".clangd" is a config file now, thus trailing slash)
+.clangd/
+.cache
+
+/scripts/llc-16

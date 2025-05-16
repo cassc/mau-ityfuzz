@@ -1,0 +1,2 @@
+/usr/bin/ar qc libptxsema.a CMakeFiles/ptxsema.dir/BasicBlock.cpp.o CMakeFiles/ptxsema.dir/Arith256.cpp.o CMakeFiles/ptxsema.dir/Instruction.cpp.o CMakeFiles/ptxsema.dir/Type.cpp.o CMakeFiles/ptxsema.dir/Optimizer.cpp.o CMakeFiles/ptxsema.dir/Sanitizers.cpp.o CMakeFiles/ptxsema.dir/CodeGen.cpp.o CMakeFiles/ptxsema.dir/EEIModule.cpp.o CMakeFiles/ptxsema.dir/WASMCompiler.cpp.o CMakeFiles/ptxsema.dir/AFL.cpp.o
+/usr/bin/ranlib libptxsema.a
