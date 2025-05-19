@@ -29,8 +29,9 @@ LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './test-contracts/*' --ptx-path kerne
 
 > ❔Status
 >
-> - No bug found when tesing the `./test-contracts/source-BugSample.sol` contract. Does this ityfuzz version require Oracle?
-> - Got same results for `LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'` regardless of whehter `--ptx-path` is used.
+> - Found bugs when using `LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'` regardless of whehter `--ptx-path` is used.
+> - No bugs were found when tesing the `./test-contracts/source-BugSample.sol` contract. Does this ityfuzz version require Oracle?
+
 
 --------------------------------------------------------------------------------
 

@@ -1,0 +1,275 @@
+[
+	{
+		"inputs": [],
+		"stateMutability": "payable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "echidna_nop",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			}
+		],
+		"name": "f1",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			}
+		],
+		"name": "f10",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg4",
+				"type": "uint256"
+			}
+		],
+		"name": "f2",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			}
+		],
+		"name": "f3",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			}
+		],
+		"name": "f4",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			}
+		],
+		"name": "f5",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			}
+		],
+		"name": "f6",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg4",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg5",
+				"type": "uint256"
+			}
+		],
+		"name": "f7",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg4",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg5",
+				"type": "uint256"
+			}
+		],
+		"name": "f8",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "arg0",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg1",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg2",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg3",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "arg4",
+				"type": "uint256"
+			}
+		],
+		"name": "f9",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]
