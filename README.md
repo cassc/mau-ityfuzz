@@ -10,6 +10,9 @@ docker run --gpus all -it --rm -v $(pwd):/app -w /app mau-profile /bin/bash
 # solc-select use 0.7.6
 solc --bin --abi ./test-contract/source-BugSample.sol -o ./test-contratcts/
 
+# Test contracts provided in artificat
+LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'
+
 
 # The test folder is expecteted to contain TargetContract.abi (ABI)
 # and TargetContract.bin (deployment binary), filenames must match the target contract name to be tested.:
