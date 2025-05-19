@@ -128,10 +128,11 @@ impl ContractLoader {
     }
 
     fn parse_hex_file(path: &Path) -> Vec<u8> {
+        println!("Parsing hex file: {:?}", path);
         let mut file = File::open(path).unwrap();
         let mut data = String::new();
         file.read_to_string(&mut data).unwrap();
-        hex::decode(data).expect("Failed to parse hex file")
+        hex::decode(data.trim()).expect("Failed to parse hex file")
     }
 
     pub fn from_prefix(prefix: &str, state: &mut EVMFuzzState, source_map_info: Option<ContractsSourceMapInfo>) -> Self {

@@ -5,9 +5,29 @@
 git clone --depth 1 git@github.com:cassc/mau-ityfuzz.git
 cd mau-ityfuzz
 docker run --gpus all -it --rm -v $(pwd):/app -w /app mau-profile /bin/bash
-LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'
+
+# (optional, already generated for the BugSample contract) Generate binary and ABI
+# solc-select use 0.7.6
+solc --bin --abi ./test-contract/source-BugSample.sol -o ./test-contratcts/
+
+
+# The test folder is expecteted to contain TargetContract.abi (ABI)
+# and TargetContract.bin (deployment binary), filenames must match the target contract name to be tested.:
+LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './test-contracts/*'
+
+
+# CUDA mode
+./ptxsema ./test-contracts/BugSample.bin -o ./bytecode.ll --hex --dump
+llvm-link ./rt.o.bc ./bytecode.ll -o ./kernel.bc
+llvm-dis kernel.bc -o kernel.ll
+llc-16 -mcpu=sm_86 kernel.bc -o kernel.ptx
+LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './test-contracts/*' --ptx-path kernel.ptx --gpu-dev 0
 ```
 
+> ❔Status
+>
+> - No bug found when tesing the `./test-contracts/source-BugSample.sol` contract. Does this ityfuzz version require Oracle?
+> - Got same results for `LD_LIBRARY_PATH=./runner/ ./mau-ityfuzz -t './tests/complex-condition/*'` regardless of whehter `--ptx-path` is used.
 
 --------------------------------------------------------------------------------
 
@@ -93,7 +113,10 @@ CUDA mode
 
 complex-condition
 ```bash
-~/build/sema/src/standalone-ptxsema /data_HDD/weimin/EXP-Artifact/ityfuzz/tests/complex-condition/main.bin -o ./bytecode.ll --hex --dump && llvm-link ~/build/rt.o.bc ./bytecode.ll -o ./kernel.bc && llvm-dis kernel.bc -o kernel.ll && ~/wasmfuzz/ethfuzz/repo/scripts/llc-16 -mcpu=sm_86 kernel.bc -o kernel.ptx && LD_LIBRARY_PATH=/home/weimin/build/runner/ /data_HDD/weimin/EXP-Artifact/ityfuzz/cli/target/release/cli -t '/data_HDD/weimin/EXP-Artifact/ityfuzz/tests/complex-condition/*' --ptx-path kernel.ptx --gpu-dev 0
+~/build/sema/src/standalone-ptxsema /data_HDD/weimin/EXP-Artifact/ityfuzz/tests/complex-condition/main.bin -o ./bytecode.ll --hex --dump
+llvm-link ~/build/rt.o.bc ./bytecode.ll -o ./kernel.bc && llvm-dis kernel.bc -o kernel.ll
+~/wasmfuzz/ethfuzz/repo/scripts/llc-16 -mcpu=sm_86 kernel.bc -o kernel.ptx
+LD_LIBRARY_PATH=/home/weimin/build/runner/ /data_HDD/weimin/EXP-Artifact/ityfuzz/cli/target/release/cli -t '/data_HDD/weimin/EXP-Artifact/ityfuzz/tests/complex-condition/*' --ptx-path kernel.ptx --gpu-dev 0
 ```
 
 storage
