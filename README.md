@@ -4,7 +4,7 @@
 # Clone this repo
 git clone --depth 1 git@github.com:cassc/mau-ityfuzz.git
 cd mau-ityfuzz
-docker run --gpus all -it --rm -v $(pwd):/app -w /app mau-profile /bin/bash
+docker run --gpus all -it --rm -v $(pwd):/app -w /app augustus/mau-ityfuzz /bin/bash
 
 # (optional, already generated for the BugSample contract) Generate binary and ABI
 # solc-select use 0.7.6
