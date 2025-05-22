@@ -1,51 +1,52 @@
 /// Implements fuzzing logic for ItyFuzz
-
 use crate::{
+    evm::{abi::BoxedABI, input::EVMInputT, mutator, types::EVMAddress},
     input::VMInputT,
+    scheduler::HasVote,
     state::{HasCurrentInputIdx, HasInfantStateState, HasItyState, InfantStateState},
-    state_input::StagedVMState, evm::{types::EVMAddress, input::EVMInputT, abi::BoxedABI, mutator}, scheduler::HasVote,
+    state_input::StagedVMState,
 };
-use std::{collections::hash_map::DefaultHasher, io::Read, ops::Deref, borrow::BorrowMut};
-use std::collections::HashMap;
+use core::{
+    cell::RefCell,
+    cmp::{max, min},
+};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::ptr;
-use core::{
-    cmp::{max, min},
-    cell::RefCell,
-};
+use std::{borrow::BorrowMut, collections::hash_map::DefaultHasher, io::Read, ops::Deref};
+use std::{collections::HashMap, io};
 
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::path::Path;
 use std::process::exit;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{marker::PhantomData, time::Duration};
 
-use crate::evm::vm::EVMState;
 use crate::evm::oracles::erc20::ORACLE_OUTPUT;
+use crate::evm::vm::EVMState;
 use crate::generic_vm::vm_executor::MAP_SIZE;
 use crate::generic_vm::vm_state::VMStateT;
 use crate::state::{HasCaller, HasExecutionResult};
 use crate::tracer::build_basic_txn;
 use libafl::{
     fuzzer::Fuzzer,
+    inputs::Input,
     mark_feature_time,
     prelude::{
-        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasObservers, 
-        State, HasRand, Rand, HasMaxSize, ObserversTuple, Testcase,
+        current_time, Corpus, Event, EventConfig, EventManager, Executor, Feedback, HasMaxSize,
+        HasObservers, HasRand, ObserversTuple, Rand, State, Testcase,
     },
     schedulers::Scheduler,
     stages::StagesTuple,
     start_timer,
     state::{HasClientPerfMonitor, HasCorpus, HasExecutions, HasMetadata, HasSolutions},
     Error, Evaluator, ExecuteInputResult,
-    inputs::Input,
 };
 use nix::sys::stat;
 use revm_primitives::bitvec::macros::internal::funty::{Fundamental, Numeric};
 use serde_traitobject::Any;
 
-use crate::evm::host::{JMP_MAP, BRANCH_DISTANCE_INTERESTING, EXPLORED_INS, EXPLORED_EDGE,};
+use crate::evm::host::{BRANCH_DISTANCE_INTERESTING, EXPLORED_EDGE, EXPLORED_INS, JMP_MAP};
 use crate::evm::types::EVMU256;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -54,7 +55,7 @@ use std::hash::{Hash, Hasher};
 use crate::evm::input::EVMInput;
 
 const STATS_TIMEOUT_DEFAULT: Duration = Duration::from_millis(4000);
-use crate::evm::config::{RUN_FOREVER, DUMP_CORPUS};
+use crate::evm::config::{DUMP_CORPUS, RUN_FOREVER};
 
 /// A fuzzer that implements ItyFuzz logic using LibAFL's [`Fuzzer`] trait
 ///
@@ -211,7 +212,7 @@ where
         + HasMaxSize
         + HasCaller<Addr>
         + HasClientPerfMonitor
-        + HasExecutions 
+        + HasExecutions
         + HasMetadata
         + HasCurrentInputIdx
         + HasCorpus<I>
@@ -220,22 +221,21 @@ where
         + HasItyState<Loc, Addr, VS>
         + HasItyState<EVMAddress, EVMAddress, EVMState>
         + HasExecutionResult<Loc, Addr, VS, Out>,
-        Out: Default,
+    Out: Default,
 
-        // E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
-        // OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
-        // EM: EventManager<E, I, S, Self>,
-        // S: HasClientPerfMonitor
-        //     + HasCorpus<I>
-        //     + HasSolutions<I>
-        //     + HasInfantStateState<Loc, Addr, VS>
-        //     + HasItyState<Loc, Addr, VS>
-        //     + HasExecutionResult<Loc, Addr, VS, Out>
-        //     + HasExecutions,
-        // VS: Default + VMStateT,
-        // Addr: Serialize + DeserializeOwned + Debug + Clone,
-        // Loc: Serialize + DeserializeOwned + Debug + Clone,
-
+    // E: Executor<EM, I, S, Self> + HasObservers<I, OT, S>,
+    // OT: ObserversTuple<I, S> + serde::Serialize + serde::de::DeserializeOwned,
+    // EM: EventManager<E, I, S, Self>,
+    // S: HasClientPerfMonitor
+    //     + HasCorpus<I>
+    //     + HasSolutions<I>
+    //     + HasInfantStateState<Loc, Addr, VS>
+    //     + HasItyState<Loc, Addr, VS>
+    //     + HasExecutionResult<Loc, Addr, VS, Out>
+    //     + HasExecutions,
+    // VS: Default + VMStateT,
+    // Addr: Serialize + DeserializeOwned + Debug + Clone,
+    // Loc: Serialize + DeserializeOwned + Debug + Clone,
     ST: StagesTuple<E, EM, S, Self> + ?Sized,
     VS: Default + VMStateT,
     Addr: Serialize + DeserializeOwned + Debug + Clone,
@@ -323,7 +323,7 @@ where
     //         fn cuDumpStorage(threadId: u32);
     //         fn cuLoadStorage(src: *const u8, slotCnt: u32, wrapi: u32);
     //     }
-    //     loop {           
+    //     loop {
     //         let corpus_size = state.corpus().count();
     //         let wrap_count = min(corpus_size, NJOBS as usize);
     //         let slot_count = NJOBS as usize / wrap_count;
@@ -351,15 +351,14 @@ where
     //                 .borrow_mut()
     //                 .load_input()?
     //                 .clone();
-                
 
     //             // let empty = match input.get_data_abi() {
     //             //     None => true,
     //             //     Some(ref abi) => abi.get_bytes_vec().len() == 0,
     //             // };
-    //             // if empty { 
+    //             // if empty {
     //             //     // let _ = self.evaluate_input(state, executor, manager, input);
-    //             //     continue; 
+    //             //     continue;
     //             // }
 
     //             if !input.get_staged_state().initialized {
@@ -387,7 +386,7 @@ where
     //             } else {
     //                 unsafe{ cuLoadStorage(ptr::null(), 0, wrap_i as u32); }
     //             }
-                
+
     //             let itr = if wrap_i == wrap_count - 1 {
     //                 slot_count + (NJOBS as usize % wrap_count)
     //             } else {
@@ -395,13 +394,13 @@ where
     //             };
     //             for _ in 0..itr {
     //                 input.mutate(state);
-    //                 let calldata = 
+    //                 let calldata =
     //                     match input.get_data_abi() {
     //                         None => input.get_direct_data(),
     //                         Some(ref abi) => abi.get_bytes(), // function hash + encoded args
     //                     };
     //                 let calldatasize = calldata.len();
-    //                 // println!("tid#{:?} calldata:=> {:?}\n", tid, hex::encode(calldata.clone()));     
+    //                 // println!("tid#{:?} calldata:=> {:?}\n", tid, hex::encode(calldata.clone()));
     //                 input_vec.push(input.as_any().downcast_ref::<EVMInput>().unwrap().clone());
 
     //                 let callvalue: [u8; 32] = input.get_txn_value().unwrap_or(EVMU256::ZERO).to_le_bytes();
@@ -412,7 +411,7 @@ where
     //             }
     //         }
 
-    //         *state.executions_mut() += tid as usize; 
+    //         *state.executions_mut() += tid as usize;
     //         // run
     //         unsafe {
     //             cuEvalTxn(wrap_count as u32);
@@ -425,7 +424,7 @@ where
 
     //         for (thread_id, tmp_in) in input_vec.iter_mut().enumerate() {
     //             let thread_input = tmp_in.as_any_mut().downcast_ref::<I>().unwrap().clone();
-    //             let hnb : ExecuteCudaInputResult = unsafe { 
+    //             let hnb : ExecuteCudaInputResult = unsafe {
     //                 let r = isCudaInteresting(thread_id as u32);
     //                 // println!("hnb[{:?}] = {:?}", thread_id, r);
     //                 std::mem::transmute(r)
@@ -442,7 +441,7 @@ where
     //                 ExecuteCudaInputResult::EXECBUGGY => {
     //                     // unsafe{ cuDumpStorage(thread_id as u32); }
     //                     #[cfg(feature = "print_txn_corpus")]
-    //                     {   
+    //                     {
     //                         println!("[bug] bug() hit at {:?}", thread_id);
     //                         let txn = build_basic_txn(&thread_input, &state.get_execution_result());
     //                         state.get_execution_result_mut().new_state.trace.from_idx = Some(thread_input.get_state_idx());
@@ -507,15 +506,15 @@ pub static mut DUMP_FILE_COUNT: usize = 0;
 
 pub enum ExecuteCudaInputResult {
     /// No special input
-    EXECNONE = 0, 
+    EXECNONE = 0,
     /// Fail to execute this cuda input, i.e.,
-    EXECREVERTED, 
+    EXECREVERTED,
     /// This input should be stored in the corpus
-    EXECINTERESTING, 
+    EXECINTERESTING,
     /// This input leads to a solution
     EXECBUGGY,
     /// mininer distance
-    EXECLESSDISTANCE, 
+    EXECLESSDISTANCE,
 }
 
 // implement evaluator trait for ItyFuzzer
@@ -613,14 +612,16 @@ where
 
         // add the new VM state to infant state corpus if it is interesting
         if is_infant_interesting && !reverted {
-            let idx_infant_state = state.add_infant_state(
-                &state.get_execution_result().new_state.clone(),
-                self.infant_scheduler,
-            ).unwrap();
+            let idx_infant_state = state
+                .add_infant_state(
+                    &state.get_execution_result().new_state.clone(),
+                    self.infant_scheduler,
+                )
+                .unwrap();
             // println!("==========Interesting infant states #{:?} ==========", idx_infant_state);
             // load initial storage one by one (heavy mode)
-            // #[cfg(feature = "cuda_snapshot_storage")] 
-            // {   
+            // #[cfg(feature = "cuda_snapshot_storage")]
+            // {
             //     // println!("changed => len = {:?}: {:?}", a.len(), a);
             //     // let k = state.get_execution_result().new_state.clone();
             //     // println!("==========Interesting infant states ========== \n{:?}\n------\n{:?}\n==========", k.state.as_any().downcast_ref::<EVMState>().unwrap());
@@ -681,11 +682,7 @@ where
                     DUMP_FILE_COUNT += 1;
                 }
 
-                let tx_trace = state
-                    .get_execution_result()
-                    .new_state
-                    .trace
-                    .clone();
+                let tx_trace = state.get_execution_result().new_state.trace.clone();
                 // let txn_text = tx_trace.to_string(state);
 
                 let txn_text_replayable = tx_trace.to_file_str(state);
@@ -707,201 +704,215 @@ where
                 // let mut file =
                 //     File::create(format!("{}/{}", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT })).unwrap();
                 // file.write_all(data.as_bytes()).unwrap();
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_nanos();
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_nanos();
 
-                let mut replayable_file =
-                    File::create(format!("{}/{}_{}_replayable", self.corpus_path.as_str(), unsafe { DUMP_FILE_COUNT }, timestamp)).unwrap();
-                replayable_file.write_all(txn_text_replayable.as_bytes()).unwrap();
-                
-                let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_nanos();
+                let mut replayable_file = File::create(format!(
+                    "{}/{}_{}_replayable",
+                    self.corpus_path.as_str(),
+                    unsafe { DUMP_FILE_COUNT },
+                    timestamp
+                ))
+                .unwrap();
+                replayable_file
+                    .write_all(txn_text_replayable.as_bytes())
+                    .unwrap();
+
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_nanos();
 
                 // deployment/maze-10/maze-10(0x6b773032d99fb9aad6fc267651c446fa7f9301af): 85.13% (18040) Instruction Covered, 78.28% (1824) Branch Covered 1697701037735016082
 
                 println!(
-                    "deployment/contract/contract(0x6b773032d99fb9aad6fc267651c446fa7f9301af): 0.00% ({}) Instruction Covered, 0.00% ({}) Branch Covered {}",
+                    "Instruction Covered: {}; Branch Covered: {} Timestamp Nanos: {}",
                     unsafe { EXPLORED_INS },
                     unsafe { EXPLORED_EDGE },
                     timestamp,
                 );
+
+                let _ = io::stdout().flush();
             }
         }
         match res {
             // not interesting input, just check whether we should replace it due to better fav factor
             ExecuteInputResult::None => {
-            //     let cuda_input = input.clone();
-            //     let calldata = 
-            //     match cuda_input.get_data_abi() {
-            //         None => input.get_direct_data(),
-            //         Some(ref abi) => abi.get_bytes(),
-            //     };
-            //     let calldatasize = calldata.len();
-        
-            //     // execute inside the GPU
-            //     #[cfg(feature = "cuda")]
-            //     {   
-            //         // println!("[+] Cuda enabled");
-            //         let begin_cuda_time = current_time();
-            //         // if *state.executions() > 200000 && res == ExecuteInputResult::None 
-            //         if calldata.len() > 0 && *state.executions() > 0 {
-            //             // println!("Cuda is trying to solve constraints...");
-            //             *state.executions_mut() += NJOBS as usize;
-            //             #[link(name = "runner")]
-            //             extern "C" {
-            //                 fn cuExtSeeds(rawSeed: *const u8, size: u32);
-            //                 fn cuEvalTxn(size: u32);
-            //                 fn cuMutate(calldasize: u32, argTypes: *const u8, argTypesLen: u32);
-            //                 fn getCudaExecRes(pcov: *const u64, pbug: *const u64) -> bool;
-            //                 fn gainCov(tid: u32, RawSeed: *mut u8) -> u8;
-            //                 fn cuDumpStorage(threadId: u32);
-            //             }
+                //     let cuda_input = input.clone();
+                //     let calldata =
+                //     match cuda_input.get_data_abi() {
+                //         None => input.get_direct_data(),
+                //         Some(ref abi) => abi.get_bytes(),
+                //     };
+                //     let calldatasize = calldata.len();
 
-            //             // load environmental variables and storage to cuda context
-            //             cuda_input.set_evm_env();
-            //             cuda_input.get_state().get_s(&cuda_input.get_evm_contract());
+                //     // execute inside the GPU
+                //     #[cfg(feature = "cuda")]
+                //     {
+                //         // println!("[+] Cuda enabled");
+                //         let begin_cuda_time = current_time();
+                //         // if *state.executions() > 200000 && res == ExecuteInputResult::None
+                //         if calldata.len() > 0 && *state.executions() > 0 {
+                //             // println!("Cuda is trying to solve constraints...");
+                //             *state.executions_mut() += NJOBS as usize;
+                //             #[link(name = "runner")]
+                //             extern "C" {
+                //                 fn cuExtSeeds(rawSeed: *const u8, size: u32);
+                //                 fn cuEvalTxn(size: u32);
+                //                 fn cuMutate(calldasize: u32, argTypes: *const u8, argTypesLen: u32);
+                //                 fn getCudaExecRes(pcov: *const u64, pbug: *const u64) -> bool;
+                //                 fn gainCov(tid: u32, RawSeed: *mut u8) -> u8;
+                //                 fn cuDumpStorage(threadId: u32);
+                //             }
 
-            //             let input_type_vec = cuda_input.as_any()
-            //                 .downcast_ref::<EVMInput>()
-            //                 .unwrap().get_types_vec();
+                //             // load environmental variables and storage to cuda context
+                //             cuda_input.set_evm_env();
+                //             cuda_input.get_state().get_s(&cuda_input.get_evm_contract());
 
-            //             unsafe {
-            //                 cuExtSeeds(calldata.as_ptr(), calldatasize as u32);
-            //                 cuMutate(calldatasize as u32, input_type_vec.as_ptr(), input_type_vec.len() as u32);
-            //                 cuEvalTxn(calldatasize as u32);
-            //             }
-            //             let end_cuda_execute = current_time();
-            //             // println!("executed in CUDA costs {:?}", end_cuda_execute - begin_cuda_time);
+                //             let input_type_vec = cuda_input.as_any()
+                //                 .downcast_ref::<EVMInput>()
+                //                 .unwrap().get_types_vec();
 
-            //             unsafe {
-            //                 let mut new_cuda_cov : u64 = 0; // remove
-            //                 let mut buggy_tid : u64 = 0; // remove
-            //                 let _ = getCudaExecRes(&new_cuda_cov, &buggy_tid);
-            //             }
+                //             unsafe {
+                //                 cuExtSeeds(calldata.as_ptr(), calldatasize as u32);
+                //                 cuMutate(calldatasize as u32, input_type_vec.as_ptr(), input_type_vec.len() as u32);
+                //                 cuEvalTxn(calldatasize as u32);
+                //             }
+                //             let end_cuda_execute = current_time();
+                //             // println!("executed in CUDA costs {:?}", end_cuda_execute - begin_cuda_time);
 
-            //             let mut tx_bytes:[u8; SEED_SIZE] = [0; SEED_SIZE];
-                        
-            //             for tid in 0..NJOBS {
-            //                 tx_bytes.fill(0);
-            //                 let hnb : ExecuteCudaInputResult = unsafe { 
-            //                     let r = gainCov(tid, tx_bytes.as_mut_ptr());
-            //                     std::mem::transmute(r)
-            //                 };
+                //             unsafe {
+                //                 let mut new_cuda_cov : u64 = 0; // remove
+                //                 let mut buggy_tid : u64 = 0; // remove
+                //                 let _ = getCudaExecRes(&new_cuda_cov, &buggy_tid);
+                //             }
 
-            //                 match hnb {
-            //                     ExecuteCudaInputResult::EXECNONE => {
-            //                         continue;
-            //                     }
-            //                     ExecuteCudaInputResult::EXECREVERTED => {
-            //                         continue;
-            //                     }
-            //                     ExecuteCudaInputResult::EXECBUGGY => {
-            //                         // bug detected
-            //                         println!("========= Bug detected in thread {:?} ==========", tid);
-            //                         // unsafe{ cuDumpStorage(tid as u32); }
-            //                         #[cfg(any(feature = "print_cuda_corpus"))]
-            //                         {   
-            //                             let mut gpu_input = cuda_input.clone();
-                                        
-            //                             // println!(
-            //                             //     "Debug a solution! trace: {}",
-            //                             //     state
-            //                             //         .get_execution_result()
-            //                             //         .new_state
-            //                             //         .trace
-            //                             //         .clone()
-            //                             //         .to_string(state)
-            //                             // );
-            //                             //let original_data = gpu_input.get_data_abi().unwrap().get_bytes();
+                //             let mut tx_bytes:[u8; SEED_SIZE] = [0; SEED_SIZE];
 
-            //                             gpu_input
-            //                                     .get_data_abi_mut()
-            //                                     .as_mut()
-            //                                     .unwrap()
-            //                                     .set_bytes(tx_bytes.to_vec());
-            //                             gpu_input.set_cuda_input(vec![]); // TODO
-            //                             /*let after_bytes = gpu_input.get_data_abi().unwrap().get_bytes();
-            //                             println!(
-            //                                 "calldata:=> {:?}\nabi-data:=> {:?}\nafttdata:=> {:?}",
-            //                                 hex::encode(tx_bytes.to_vec()),
-            //                                 hex::encode(original_data.clone()),
-            //                                 hex::encode(after_bytes),
-            //                             );
-            //                             */
+                //             for tid in 0..NJOBS {
+                //                 tx_bytes.fill(0);
+                //                 let hnb : ExecuteCudaInputResult = unsafe {
+                //                     let r = gainCov(tid, tx_bytes.as_mut_ptr());
+                //                     std::mem::transmute(r)
+                //                 };
 
-            //                             let txn = build_basic_txn(&gpu_input, &state.get_execution_result());
-            //                             state.get_execution_result_mut().new_state.trace.from_idx = Some(gpu_input.get_state_idx());
-            //                             state
-            //                                 .get_execution_result_mut()
-            //                                 .new_state
-            //                                 .trace
-            //                                 .renew_last_txn(txn);
-            //                             report_vulnerability(
-            //                                 unsafe {ORACLE_OUTPUT.clone()},
-            //                             );
-            //                             unsafe {
-            //                                 println!("Oracle: {}", ORACLE_OUTPUT);
-            //                             }
-            //                             println!(
-            //                                 "Found a solution! trace: {}",
-            //                                 state
-            //                                     .get_execution_result()
-            //                                     .new_state
-            //                                     .trace
-            //                                     .clone()
-            //                                     .to_string(state)
-            //                             );
-            //                             // exit(0);
-            //                         } // print_cuda_corpus
-            //                     }
-            //                     ExecuteCudaInputResult::EXECINTERESTING => {
-            //                         let mut gpu_input = cuda_input.clone();
-                                    
-            //                         // let original_data = gpu_input.get_data_abi().unwrap().get_bytes();
-            //                         gpu_input
-            //                                 .get_data_abi_mut()
-            //                                 .as_mut()
-            //                                 .unwrap()
-            //                                 .set_bytes(tx_bytes.to_vec());
-            //                         gpu_input.set_cuda_input(vec![]); // TODO
+                //                 match hnb {
+                //                     ExecuteCudaInputResult::EXECNONE => {
+                //                         continue;
+                //                     }
+                //                     ExecuteCudaInputResult::EXECREVERTED => {
+                //                         continue;
+                //                     }
+                //                     ExecuteCudaInputResult::EXECBUGGY => {
+                //                         // bug detected
+                //                         println!("========= Bug detected in thread {:?} ==========", tid);
+                //                         // unsafe{ cuDumpStorage(tid as u32); }
+                //                         #[cfg(any(feature = "print_cuda_corpus"))]
+                //                         {
+                //                             let mut gpu_input = cuda_input.clone();
 
-            //                         // let after_bytes = gpu_input.get_data_abi().unwrap().get_bytes();
-            //                         // println!(
-            //                         //     "calldata:=> {:?}\nabi-data:=> {:?}\nafttdata:=> {:?}",
-            //                         //     hex::encode(tx_bytes.to_vec()),
-            //                         //     hex::encode(original_data.clone()),
-            //                         //     hex::encode(after_bytes),
-            //                         // );
-                                    
-            //                         #[cfg(feature = "print_txn_corpus")]
-            //                         {
-            //                             let tx_trace = state
-            //                                 .get_execution_result()
-            //                                 .new_state
-            //                                 .trace
-            //                                 .clone();
-            //                             let txn_text = tx_trace.to_string(state);            
-            //                             let data = format!(
-            //                                 "Reverted? {} \n Txn: {}",
-            //                                 state.get_execution_result().reverted,
-            //                                 txn_text
-            //                             );
-            //                             println!("======== New Corpus Item From GPU#{:?} ========", tid);
-            //                             println!("{}", data);
-            //                             println!("==========================================");
-            //                         }
-                                    
-            //                         // add the cuda-varient to the corpus
-            //                         let mut cu_testcase = Testcase::new(gpu_input.clone());
-            //                         self.feedback.append_metadata(state, &mut cu_testcase)?;
-            //                         let idx = state.corpus_mut().add(cu_testcase)?;
-            //                         self.scheduler.on_add(state, idx)?;
-            //                         self.on_add_corpus(&gpu_input, unsafe { &JMP_MAP }, idx);
-            //                     }
-            //                 }
-            //             } 
-            //             let end_cuda_feedback = current_time();
-            //             // println!("feedback in CUDA costs  {:?}", end_cuda_feedback - end_cuda_execute);
-            //         }
-            //     }
+                //                             // println!(
+                //                             //     "Debug a solution! trace: {}",
+                //                             //     state
+                //                             //         .get_execution_result()
+                //                             //         .new_state
+                //                             //         .trace
+                //                             //         .clone()
+                //                             //         .to_string(state)
+                //                             // );
+                //                             //let original_data = gpu_input.get_data_abi().unwrap().get_bytes();
+
+                //                             gpu_input
+                //                                     .get_data_abi_mut()
+                //                                     .as_mut()
+                //                                     .unwrap()
+                //                                     .set_bytes(tx_bytes.to_vec());
+                //                             gpu_input.set_cuda_input(vec![]); // TODO
+                //                             /*let after_bytes = gpu_input.get_data_abi().unwrap().get_bytes();
+                //                             println!(
+                //                                 "calldata:=> {:?}\nabi-data:=> {:?}\nafttdata:=> {:?}",
+                //                                 hex::encode(tx_bytes.to_vec()),
+                //                                 hex::encode(original_data.clone()),
+                //                                 hex::encode(after_bytes),
+                //                             );
+                //                             */
+                //                             let txn = build_basic_txn(&gpu_input, &state.get_execution_result());
+                //                             state.get_execution_result_mut().new_state.trace.from_idx = Some(gpu_input.get_state_idx());
+                //                             state
+                //                                 .get_execution_result_mut()
+                //                                 .new_state
+                //                                 .trace
+                //                                 .renew_last_txn(txn);
+                //                             report_vulnerability(
+                //                                 unsafe {ORACLE_OUTPUT.clone()},
+                //                             );
+                //                             unsafe {
+                //                                 println!("Oracle: {}", ORACLE_OUTPUT);
+                //                             }
+                //                             println!(
+                //                                 "Found a solution! trace: {}",
+                //                                 state
+                //                                     .get_execution_result()
+                //                                     .new_state
+                //                                     .trace
+                //                                     .clone()
+                //                                     .to_string(state)
+                //                             );
+                //                             // exit(0);
+                //                         } // print_cuda_corpus
+                //                     }
+                //                     ExecuteCudaInputResult::EXECINTERESTING => {
+                //                         let mut gpu_input = cuda_input.clone();
+
+                //                         // let original_data = gpu_input.get_data_abi().unwrap().get_bytes();
+                //                         gpu_input
+                //                                 .get_data_abi_mut()
+                //                                 .as_mut()
+                //                                 .unwrap()
+                //                                 .set_bytes(tx_bytes.to_vec());
+                //                         gpu_input.set_cuda_input(vec![]); // TODO
+
+                //                         // let after_bytes = gpu_input.get_data_abi().unwrap().get_bytes();
+                //                         // println!(
+                //                         //     "calldata:=> {:?}\nabi-data:=> {:?}\nafttdata:=> {:?}",
+                //                         //     hex::encode(tx_bytes.to_vec()),
+                //                         //     hex::encode(original_data.clone()),
+                //                         //     hex::encode(after_bytes),
+                //                         // );
+
+                //                         #[cfg(feature = "print_txn_corpus")]
+                //                         {
+                //                             let tx_trace = state
+                //                                 .get_execution_result()
+                //                                 .new_state
+                //                                 .trace
+                //                                 .clone();
+                //                             let txn_text = tx_trace.to_string(state);
+                //                             let data = format!(
+                //                                 "Reverted? {} \n Txn: {}",
+                //                                 state.get_execution_result().reverted,
+                //                                 txn_text
+                //                             );
+                //                             println!("======== New Corpus Item From GPU#{:?} ========", tid);
+                //                             println!("{}", data);
+                //                             println!("==========================================");
+                //                         }
+
+                //                         // add the cuda-varient to the corpus
+                //                         let mut cu_testcase = Testcase::new(gpu_input.clone());
+                //                         self.feedback.append_metadata(state, &mut cu_testcase)?;
+                //                         let idx = state.corpus_mut().add(cu_testcase)?;
+                //                         self.scheduler.on_add(state, idx)?;
+                //                         self.on_add_corpus(&gpu_input, unsafe { &JMP_MAP }, idx);
+                //                     }
+                //                 }
+                //             }
+                //             let end_cuda_feedback = current_time();
+                //             // println!("feedback in CUDA costs  {:?}", end_cuda_feedback - end_cuda_execute);
+                //         }
+                //     }
 
                 self.objective.discard_metadata(state, &input)?;
                 match self.should_replace(&input, unsafe { &JMP_MAP }) {
@@ -974,7 +985,7 @@ where
                         .clone()
                         .to_string(state)
                 );
-                
+
                 if !unsafe { RUN_FOREVER } {
                     exit(0);
                 }

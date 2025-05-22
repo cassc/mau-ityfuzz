@@ -5,15 +5,21 @@ use crate::evm::mutator::AccessPattern;
 use crate::evm::onchain::flashloan::{Flashloan, FlashloanData};
 use bytes::Bytes;
 use itertools::Itertools;
-use libafl::prelude::{HasCorpus, Scheduler, HasRand};
+use libafl::prelude::{HasCorpus, HasRand, Scheduler};
 use libafl::state::State;
 use primitive_types::H256;
 use revm::db::BenchmarkDB;
-use revm_interpreter::InstructionResult::{Continue, Return, Revert};
 use revm_interpreter::gas::EXP;
+use revm_interpreter::InstructionResult::{Continue, Return, Revert};
 
-
-use std::process::exit;
+use crate::evm::types::{as_u64, generate_random_address, is_zero, EVMAddress, EVMU256};
+use hex::FromHex;
+use revm_interpreter::analysis::to_analysed;
+use revm_interpreter::{
+    BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host,
+    InstructionResult, Interpreter, SelfDestructResult,
+};
+use revm_primitives::{Bytecode, Env, LatestSpec, Spec, B256};
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -23,15 +29,11 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
 use std::ops::Deref;
+use std::process::exit;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use hex::FromHex;
-use revm_interpreter::{BytecodeLocked, CallContext, CallInputs, CallScheme, Contract, CreateInputs, Gas, Host, InstructionResult, Interpreter, SelfDestructResult};
-use revm_interpreter::analysis::to_analysed;
-use revm_primitives::{B256, Bytecode, Env, LatestSpec, Spec};
-use crate::evm::types::{as_u64, EVMAddress, EVMU256, generate_random_address, is_zero};
 
 use crate::evm::uniswap::{generate_uniswap_router_call, TokenContext};
 use crate::evm::vm::EVMState;
@@ -43,7 +45,7 @@ use crate::state::{HasCaller, HasCurrentInputIdx, HasHashToAddress, HasItyState}
 
 use super::concolic::concolic_exe_host::ConcolicEVMExecutor;
 use ahash::AHashMap;
- 
+
 pub static mut EXPLORED_INS: usize = 0;
 pub static mut EXPLORED_EDGE: usize = 0;
 
@@ -120,7 +122,7 @@ where
     pub setcode_data: HashMap<EVMAddress, Bytecode>,
     // for hash colision
     pub edge_hashmap: AHashMap<u64, usize>,
-    pub ins_hashmap:  HashSet<u64>,
+    pub ins_hashmap: HashSet<u64>,
 }
 
 impl<VS, I, S> Debug for FuzzHost<VS, I, S>
@@ -181,7 +183,7 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
-            setcode_data:self.setcode_data.clone(),
+            setcode_data: self.setcode_data.clone(),
             edge_hashmap: self.edge_hashmap.clone(),
             ins_hashmap: self.ins_hashmap.clone(),
         }
@@ -197,7 +199,6 @@ const UNBOUND_CALL_THRESHOLD: usize = 3;
 
 // if a PC transfers control to >2 addresses, we consider call at this PC to be unbounded
 const CONTROL_LEAK_THRESHOLD: usize = 2;
-
 
 impl<VS, I, S> FuzzHost<VS, I, S>
 where
@@ -229,8 +230,8 @@ where
             call_count: 0,
             #[cfg(feature = "print_logs")]
             logs: Default::default(),
-            setcode_data:HashMap::new(),
-            edge_hashmap:AHashMap::new(),
+            setcode_data: HashMap::new(),
+            edge_hashmap: AHashMap::new(),
             ins_hashmap: Default::default(),
         };
         // ret.env.block.timestamp = EVMU256::max_value();
@@ -404,7 +405,7 @@ pub static mut ARBITRARY_CALL: bool = false;
 
 impl<VS, I, S> Host<S> for FuzzHost<VS, I, S>
 where
-    S: State +HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> +  'static,
+    S: State + HasRand + HasCaller<EVMAddress> + Debug + Clone + HasCorpus<I> + 'static,
     I: VMInputT<VS, EVMAddress, EVMAddress> + EVMInputT,
     VS: VMStateT,
 {
@@ -434,7 +435,7 @@ where
             }
             if self.edge_hashmap.len() > MAP_SIZE {
                 println!("======================= Hash collison !!!! =======================");
-            } 
+            }
             macro_rules! fast_peek {
                 ($idx:expr) => {
                     interp.stack.data()[interp.stack.len() - 1 - $idx]
@@ -443,29 +444,30 @@ where
             let pc = interp.program_counter() as u64;
             if !self.ins_hashmap.contains(&pc) {
                 self.ins_hashmap.insert(pc);
-                unsafe { EXPLORED_INS = self.ins_hashmap.len(); }
-            }  
+                unsafe {
+                    EXPLORED_INS = self.ins_hashmap.len();
+                }
+            }
 
             match *interp.instruction_pointer {
                 // 0xfd => {
                 //     println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
                 // }
-                0x56 => { // JUMP
+                0x56 => {
+                    // JUMP
                     // println!("fd {} @ {:?}", interp.program_counter(), interp.contract.address);
                     let jump_dest = as_u64(fast_peek!(0));
 
                     let hash = jump_dest << 32 | (interp.program_counter() as u64);
                     let idx = match self.edge_hashmap.get(&hash) {
-                        Some(v) => {
-                            *v % MAP_SIZE
-                        }
+                        Some(v) => *v % MAP_SIZE,
                         None => {
                             let _s = self.edge_hashmap.len();
                             self.edge_hashmap.insert(hash, _s);
                             _s % MAP_SIZE
                         }
                     };
-                    
+
                     // let idx = (interp.program_counter() << 1 & (jump_dest as usize)) % MAP_SIZE;
                     if JMP_MAP[idx] == 0 {
                         self.coverage_changed = true;
@@ -487,9 +489,7 @@ where
                     // let idx = (interp.program_counter() << 1 & (jump_dest as usize)) % MAP_SIZE;
                     let hash = jump_dest << 32 | (interp.program_counter() as u64);
                     let idx = match self.edge_hashmap.get(&hash) {
-                        Some(v) => {
-                            *v % MAP_SIZE
-                        }
+                        Some(v) => *v % MAP_SIZE,
                         None => {
                             let _s = self.edge_hashmap.len();
                             self.edge_hashmap.insert(hash, _s);
@@ -530,9 +530,7 @@ where
                     // let idx = interp.program_counter() % MAP_SIZE;
                     let hash = interp.program_counter() as u64;
                     let idx = match self.edge_hashmap.get(&hash) {
-                        Some(v) => {
-                            *v % MAP_SIZE
-                        }
+                        Some(v) => *v % MAP_SIZE,
                         None => {
                             let _s = self.edge_hashmap.len();
                             self.edge_hashmap.insert(hash, _s);
@@ -639,7 +637,9 @@ where
                 }
                 _ => {}
             }
-            unsafe { EXPLORED_EDGE = self.edge_hashmap.len(); }
+            unsafe {
+                EXPLORED_EDGE = self.edge_hashmap.len();
+            }
 
             self.access_pattern
                 .deref()
@@ -649,7 +649,12 @@ where
         return Continue;
     }
 
-    fn step_end(&mut self, _interp: &mut Interpreter, _ret: InstructionResult, _: &mut S) -> InstructionResult {
+    fn step_end(
+        &mut self,
+        _interp: &mut Interpreter,
+        _ret: InstructionResult,
+        _: &mut S,
+    ) -> InstructionResult {
         return Continue;
     }
 
@@ -681,9 +686,7 @@ where
         // println!("code");
         match self.code.get(&address) {
             Some(code) => Some((code.clone(), true)),
-            None => Some((Arc::new(
-                BytecodeLocked::default()
-            ), true)),
+            None => Some((Arc::new(BytecodeLocked::default()), true)),
         }
     }
 
@@ -730,7 +733,7 @@ where
 
     fn log(&mut self, _address: EVMAddress, _topics: Vec<B256>, _data: Bytes) {
         if _topics.len() == 1 && (*_topics.last().unwrap()).0[31] == 0x37 {
-            if unsafe {PANIC_ON_BUG} {
+            if unsafe { PANIC_ON_BUG } {
                 panic!("target hit");
             }
             self.bug_hit = true;
@@ -749,7 +752,7 @@ where
                 .expect("Time went backwards");
             let timestamp = now.as_nanos();
             let data: String = hex::encode(_data);
-            
+
             if data.len() > 0x80 {
                 println!("log@{} {:?}", timestamp, &data[0x80..]);
             } else {
@@ -758,7 +761,11 @@ where
         }
     }
 
-    fn selfdestruct(&mut self, _address: EVMAddress, _target: EVMAddress) -> Option<SelfDestructResult> {
+    fn selfdestruct(
+        &mut self,
+        _address: EVMAddress,
+        _target: EVMAddress,
+    ) -> Option<SelfDestructResult> {
         return Some(SelfDestructResult::default());
     }
 
@@ -783,35 +790,21 @@ where
                     },
                 ),
                 1e10 as u64,
-                false
+                false,
             );
             let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             if ret == InstructionResult::Continue {
-                self.set_code(
-                    r_addr,
-                    Bytecode::new_raw(interp.return_value()),
-                    state
-                );
-                (
-                    Continue,
-                    Some(r_addr),
-                    Gas::new(0),
-                    interp.return_value(),
-                )
+                self.set_code(r_addr, Bytecode::new_raw(interp.return_value()), state);
+                (Continue, Some(r_addr), Gas::new(0), interp.return_value())
             } else {
-                (
-                    ret,
-                    Some(r_addr),
-                    Gas::new(0),
-                    Bytes::new(),
-                )
+                (ret, Some(r_addr), Gas::new(0), Bytes::new())
             }
         }
     }
 
     fn call(&mut self, input: &mut CallInputs, state: &mut S) -> (InstructionResult, Gas, Bytes) {
         self.call_count += 1;
-        if self.call_count >= unsafe {CALL_UNTIL} {
+        if self.call_count >= unsafe { CALL_UNTIL } {
             return (ControlLeak, Gas::new(0), Bytes::new());
         }
 
@@ -937,7 +930,7 @@ where
                         &input.context,
                     ),
                     1e10 as u64,
-                    false
+                    false,
                 );
 
                 let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
@@ -955,7 +948,7 @@ where
                     &input.context,
                 ),
                 1e10 as u64,
-                false
+                false,
             );
             let ret = interp.run_inspect::<S, FuzzHost<VS, I, S>, LatestSpec>(self, state);
             ret_back_ctx!();

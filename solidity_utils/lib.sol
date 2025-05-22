@@ -1,4 +1,4 @@
-pragma solidity ^0.8.0;
+pragma solidity ^0.4.0;
 
 function bug() {
     bytes32 t2 = bytes32(uint256(uint160(msg.sender)));
